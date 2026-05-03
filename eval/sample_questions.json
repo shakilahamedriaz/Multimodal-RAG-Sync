@@ -1,0 +1,37 @@
+[
+  {
+    "id": "q001",
+    "question": "What is the main purpose of this system?",
+    "ground_truth": "The system is a multimodal RAG knowledge base for intelligent document retrieval and question answering with source attribution.",
+    "contexts": [],
+    "kb_id": "__replace_with_kb_id__"
+  },
+  {
+    "id": "q002",
+    "question": "What document formats are supported for upload?",
+    "ground_truth": "PDF, DOCX, plain text, markdown, JPEG, PNG, WebP, TIFF, and GIF files are supported.",
+    "contexts": [],
+    "kb_id": "__replace_with_kb_id__"
+  },
+  {
+    "id": "q003",
+    "question": "How does hybrid retrieval work?",
+    "ground_truth": "Hybrid retrieval combines dense vector search using pgvector cosine similarity with sparse BM25 keyword search, blending scores using a configurable alpha parameter.",
+    "contexts": [],
+    "kb_id": "__replace_with_kb_id__"
+  },
+  {
+    "id": "q004",
+    "question": "What chunking strategies are available?",
+    "ground_truth": "Four chunking strategies are available: fixed_size (token-based sliding window), recursive (separator-based), semantic (embedding similarity grouping), and page_level (one chunk per page).",
+    "contexts": [],
+    "kb_id": "__replace_with_kb_id__"
+  },
+  {
+    "id": "q005",
+    "question": "How are API keys authenticated?",
+    "ground_truth": "API keys are authenticated using Bearer tokens. The full key is hashed with bcrypt and only a 16-character prefix is stored for fast lookup.",
+    "contexts": [],
+    "kb_id": "__replace_with_kb_id__"
+  }
+]
