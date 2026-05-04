@@ -50,7 +50,7 @@ export function DocumentUploader({ kbId, onUploaded }: Props) {
         let jobIdx = 0;
         return prev.map((i) =>
           i.status === "uploading"
-            ? { ...i, status: "polling", jobId: job_ids[jobIdx++] }
+            ? { ...i, status: "polling" as const, jobId: job_ids[jobIdx++] }
             : i,
         );
       });
@@ -108,7 +108,7 @@ export function DocumentUploader({ kbId, onUploaded }: Props) {
     if (item.status === "done")
       return <CheckCircle className="h-4 w-4 text-green-500" />;
     if (item.status === "error")
-      return <AlertCircle className="h-4 w-4 text-red-500" title={item.error} />;
+      return <AlertCircle className="h-4 w-4 text-red-500" aria-label={item.error} />;
     return null;
   };
 
