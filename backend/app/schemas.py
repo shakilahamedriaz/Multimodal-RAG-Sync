@@ -1,8 +1,9 @@
 import uuid
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 # ── Ingestion DTOs (Phase 2) ──────────────────────────────────────────────────
@@ -62,3 +63,49 @@ class SourceCitation(BaseModel):
     excerpt: str
     similarity_score: float
     rerank_score: Optional[float] = None
+
+
+# ── Chat DTOs ─────────────────────────────────────────────────────────────────
+
+class ChatMessageIn(BaseModel):
+    content: str = Field(..., min_length=1, max_length=4000)
+    stream: bool = True
+
+
+class ChatMessageOut(BaseModel):
+    id: uuid.UUID
+    role: str
+    content: str
+    sources: Optional[list[SourceCitation]] = None
+    has_answer: Optional[bool] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class ConversationOut(BaseModel):
+    id: uuid.UUID
+    kb_id: uuid.UUID
+    title: Optional[str]
+    created_at: datetime
+    updated_at: datetime
+    messages: list[ChatMessageOut] = []
+
+    class Config:
+        from_attributes = True
+
+
+class ConversationListItem(BaseModel):
+    id: uuid.UUID
+    title: Optional[str]
+    created_at: datetime
+    updated_at: datetime
+    message_count: int
+
+    class Config:
+        from_attributes = True
+
+
+class ConversationRenameIn(BaseModel):
+    title: str

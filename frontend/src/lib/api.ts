@@ -17,6 +17,14 @@ export interface KnowledgeBase {
   updated_at: string;
 }
 
+export interface UploadResult {
+  filename: string;
+  status: "queued" | "duplicate" | "unsupported" | "error";
+  document_id: string | null;
+  job_id: string | null;
+  message: string | null;
+}
+
 export interface Document {
   id: string;
   kb_id: string;
@@ -88,13 +96,13 @@ export const docApi = {
   upload: (kbId: string, files: File[]) => {
     const form = new FormData();
     files.forEach((f) => form.append("files", f));
-    return apiFetch<{ job_ids: string[] }>(`/kb/${kbId}/documents`, {
+    return apiFetch<UploadResult[]>(`/kb/${kbId}/documents`, {
       method: "POST",
       body: form,
     });
   },
   status: (kbId: string, jobId: string) =>
-    apiFetch<{ status: string; doc_id?: string; error?: string }>(`/kb/${kbId}/status/${jobId}`),
+    apiFetch<{ status: string; document_id?: string; message?: string }>(`/kb/${kbId}/status/${jobId}`),
   delete: (kbId: string, docId: string) =>
     apiFetch<void>(`/kb/${kbId}/documents/${docId}`, { method: "DELETE" }),
 };
@@ -115,6 +123,110 @@ export interface SSEEvent {
   data?: SourceCitation[];
   has_answer?: boolean;
   message?: string;
+}
+
+// ── Chat / Conversations ──────────────────────────────────────────────────────
+
+export interface ChatMessageOut {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  sources: SourceCitation[] | null;
+  has_answer: boolean | null;
+  created_at: string;
+}
+
+export interface ConversationOut {
+  id: string;
+  kb_id: string;
+  title: string | null;
+  created_at: string;
+  updated_at: string;
+  messages: ChatMessageOut[];
+}
+
+export interface ConversationListItem {
+  id: string;
+  title: string | null;
+  created_at: string;
+  updated_at: string;
+  message_count: number;
+}
+
+export const chatApi = {
+  createConversation: (kbId: string) =>
+    apiFetch<ConversationOut>(`/kb/${kbId}/conversations`, { method: "POST" }),
+
+  listConversations: (kbId: string) =>
+    apiFetch<ConversationListItem[]>(`/kb/${kbId}/conversations`),
+
+  getConversation: (kbId: string, convId: string) =>
+    apiFetch<ConversationOut>(`/kb/${kbId}/conversations/${convId}`),
+
+  deleteConversation: (kbId: string, convId: string) =>
+    apiFetch<void>(`/kb/${kbId}/conversations/${convId}`, { method: "DELETE" }),
+
+  renameConversation: (kbId: string, convId: string, title: string) =>
+    apiFetch<ConversationOut>(`/kb/${kbId}/conversations/${convId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ title }),
+    }),
+};
+
+export function streamChatMessage(
+  kbId: string,
+  convId: string,
+  content: string,
+  onEvent: (event: SSEEvent) => void,
+  onDone: () => void,
+  onError: (err: Error) => void,
+): () => void {
+  const apiKey = typeof window !== "undefined" ? localStorage.getItem("rag_api_key") : null;
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    Accept: "text/event-stream",
+    ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
+  };
+
+  const controller = new AbortController();
+
+  fetch(`${BASE}/kb/${kbId}/conversations/${convId}/messages`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ content, stream: true }),
+    signal: controller.signal,
+  })
+    .then(async (res) => {
+      if (!res.ok || !res.body) throw new Error(`${res.status}: chat failed`);
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+
+        const parts = buf.split("\n\n");
+        buf = parts.pop() ?? "";
+        for (const part of parts) {
+          const line = part.replace(/^data:\s*/, "").trim();
+          if (!line) continue;
+          try {
+            const event: SSEEvent = JSON.parse(line);
+            onEvent(event);
+            if (event.type === "done") onDone();
+          } catch {
+            // malformed SSE line
+          }
+        }
+      }
+    })
+    .catch((err) => {
+      if (err.name !== "AbortError") onError(err instanceof Error ? err : new Error(String(err)));
+    });
+
+  return () => controller.abort();
 }
 
 export function streamQuery(

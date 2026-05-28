@@ -21,6 +21,17 @@ Rules:
 4. Be concise, accurate, and direct.\
 """
 
+_CHAT_SYSTEM_PROMPT = """\
+You are an intelligent, professional assistant specialized in the documents uploaded to this knowledge base.
+
+Guidelines:
+1. Answer exclusively from the document context provided with each user message — never fabricate or use outside knowledge.
+2. Cite sources inline as [Source N], e.g. "According to [Source 1], the policy states...".
+3. Maintain a helpful, conversational tone across multiple turns. If a follow-up question refers to something from earlier in the conversation, resolve it naturally using that prior context.
+4. If the answer is not in the provided documents, acknowledge the question warmly and explain clearly that the topic is not covered in the knowledge base.
+5. Be concise, accurate, and professional. Format your responses with markdown when it aids clarity (lists, bold key terms, tables).\
+"""
+
 
 def _build_user_message(query: str, chunks: list[ChunkResult]) -> str:
     parts: list[str] = []
@@ -33,12 +44,19 @@ def _build_user_message(query: str, chunks: list[ChunkResult]) -> str:
     return f"Context:\n\n{context}\n\nQuestion: {query}"
 
 
+def _resolve_model(model: str) -> str:
+    """Add provider prefix if missing so LiteLLM can route correctly."""
+    if model.startswith("claude-") and "/" not in model:
+        return f"anthropic/{model}"
+    return model
+
+
 class LLMGenerator:
     async def stream(
         self,
         query: str,
         chunks: list[ChunkResult],
-        model: str = "gpt-4o",
+        model: str = "anthropic/claude-haiku-4-5-20251001",
     ) -> AsyncGenerator[str, None]:
         """Yield response tokens as they arrive from the LLM."""
         messages = [
@@ -47,7 +65,7 @@ class LLMGenerator:
         ]
 
         response = await litellm.acompletion(
-            model=model,
+            model=_resolve_model(model),
             messages=messages,
             stream=True,
         )
@@ -61,7 +79,7 @@ class LLMGenerator:
         self,
         query: str,
         chunks: list[ChunkResult],
-        model: str = "gpt-4o",
+        model: str = "anthropic/claude-haiku-4-5-20251001",
     ) -> str:
         """Return the full answer as a single string (non-streaming)."""
         messages = [
@@ -70,9 +88,38 @@ class LLMGenerator:
         ]
 
         response = await litellm.acompletion(
-            model=model,
+            model=_resolve_model(model),
             messages=messages,
             stream=False,
         )
 
+        return response.choices[0].message.content or ""
+
+    async def stream_chat(
+        self,
+        messages: list[dict],
+        model: str = "anthropic/claude-haiku-4-5-20251001",
+    ) -> AsyncGenerator[str, None]:
+        """Stream chat response given a full messages list (system + history + current)."""
+        response = await litellm.acompletion(
+            model=_resolve_model(model),
+            messages=messages,
+            stream=True,
+        )
+        async for chunk in response:
+            token: str = chunk.choices[0].delta.content or ""
+            if token:
+                yield token
+
+    async def complete_chat(
+        self,
+        messages: list[dict],
+        model: str = "anthropic/claude-haiku-4-5-20251001",
+    ) -> str:
+        """Return the full chat response as a single string (non-streaming)."""
+        response = await litellm.acompletion(
+            model=_resolve_model(model),
+            messages=messages,
+            stream=False,
+        )
         return response.choices[0].message.content or ""
